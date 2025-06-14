@@ -1,0 +1,15 @@
+# Cairo & Git 安全忽略
+*.json
+*.log
+*.db
+__pycache__/
+.cache/
+build/
+target/
+.env
+keystore/
+*.account.json
+*.pem
+*.key
+*.secret
+.DS_Store
