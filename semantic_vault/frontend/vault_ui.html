@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Semantic Vault</title>
+  <style>
+    body { font-family: sans-serif; background: #111; color: #eee; padding: 2em; }
+    input, button, textarea { padding: 0.5em; margin: 0.5em 0; font-size: 1em; }
+    .section { margin-bottom: 2em; border-bottom: 1px solid #444; padding-bottom: 1em; }
+    .output { font-family: monospace; background: #222; padding: 1em; white-space: pre-wrap; }
+    textarea { width: 100%; height: 5em; }
+  </style>
+</head>
+<body>
+  <h1>Semantic Vault</h1>
+
+  <div class="section">
+    <h2>📝 Store New Message</h2>
+    <p>請輸入任意語句或 ZKProof 等字串，系統會自動轉換為 felt252 並生成 CLI 指令供手動執行（限制為最多 31 bytes，過長將報錯）：</p>
+    <input id="newMessage" placeholder="Enter text or number (自動轉為 felt252)" size="50" />
+    <button onclick="storeMessage()">產生 CLI 指令</button>
+    <div id="storeResult" class="output"></div>
+  </div>
+
+  <div class="section">
+    <h2>📊 Get Total Messages</h2>
+    <p>點擊按鈕生成查詢目前已儲存的訊息總數 CLI 指令：</p>
+    <button onclick="generateTotalMessagesCommand()">產生 CLI 指令</button>
+    <div id="totalResult" class="output"></div>
+  </div>
+
+  <div class="section">
+    <h2>🔍 Get Message by ID</h2>
+    <p>輸入訊息編號（0 開始的整數）產生查詢 CLI 指令：</p>
+    <input id="msgId" placeholder="Enter message ID (e.g., 0, 1, 2...)" />
+    <button onclick="generateGetMessageCommand()">產生 CLI 指令</button>
+    <div id="msgResult" class="output"></div>
+  </div>
+
+  <div class="section">
+    <h2>📥 解碼 Felt252 結果</h2>
+    <p>將剛剛查詢指令所返回的第一段或第二段 felt252 字串貼入此處解碼為原始語句（若非原本由文字轉換，可能會無法正確顯示）：</p>
+    <input id="feltInput" placeholder="貼上 felt252 數字 (例如 0x...) 或十進位" size="80" />
+    <button onclick="decodeInput()">解碼</button>
+    <div id="decodeResult" class="output"></div>
+  </div>
+
+  <script>
+    const CONTRACT_ADDRESS = "0x007877e3ab8f2f6744095cfeb3b17a1fbf4db1874fdf959ca95a856e5d568c7e";
+    const PROVIDER_URL = "https://starknet-sepolia.public.blastapi.io/rpc/v0_8";
+
+    function toFelt252(text) {
+      const encoder = new TextEncoder();
+      const bytes = encoder.encode(text);
+      if (bytes.length > 31) throw new Error("內容超過 31 bytes，無法轉換為合法 felt252");
+      let hex = "0x" + Array.from(bytes).map(x => x.toString(16).padStart(2, "0")).join("");
+      return BigInt(hex).toString();
+    }
+
+    function decodeFelt(felt) {
+      try {
+        let hex = felt.startsWith("0x") ? felt.slice(2) : BigInt(felt).toString(16);
+        if (hex.length % 2 === 1) hex = "0" + hex;
+        const bytes = new Uint8Array(hex.match(/.{1,2}/g).map(byte => parseInt(byte, 16)));
+        return new TextDecoder().decode(bytes);
+      } catch (e) {
+        return "❌ 無法解碼";
+      }
+    }
+
+    function storeMessage() {
+      const input = document.getElementById("newMessage").value.trim();
+      if (!input) {
+        document.getElementById("storeResult").innerText = "❌ 請輸入語句或 felt252 數字。";
+        return;
+      }
+      try {
+        const felt = /^[0-9]+$/.test(input) ? input : toFelt252(input);
+        const command = `starkli invoke --account ~/.starkli-wallets/deployer/account.json --keystore ~/.starkli-wallets/deployer/keystore.json --rpc ${PROVIDER_URL} ${CONTRACT_ADDRESS} store_message ${felt}`;
+        document.getElementById("storeResult").innerText = `請在終端機輸入下列指令：\n\n${command}`;
+      } catch (e) {
+        document.getElementById("storeResult").innerText = `❌ 無法轉換：${e.message}`;
+      }
+    }
+
+    function generateTotalMessagesCommand() {
+      const command = `starkli call --rpc ${PROVIDER_URL} ${CONTRACT_ADDRESS} total_messages`;
+      document.getElementById("totalResult").innerText = `查詢訊息總數 CLI 指令：\n\n${command}`;
+    }
+
+    function generateGetMessageCommand() {
+      const id = document.getElementById("msgId").value.trim();
+      if (!/^[0-9]+$/.test(id)) {
+        document.getElementById("msgResult").innerText = "❌ 請輸入正整數作為訊息 ID。";
+        return;
+      }
+      const command = `starkli call --rpc ${PROVIDER_URL} ${CONTRACT_ADDRESS} get_message ${id}`;
+      document.getElementById("msgResult").innerText = `查詢訊息 CLI 指令：\n\n${command}\n\n請執行指令後，將結果貼入下方欄位進行解碼。`;
+    }
+
+    function decodeInput() {
+      const felt = document.getElementById("feltInput").value.trim();
+      if (!felt) {
+        document.getElementById("decodeResult").innerText = "❌ 請貼入要解碼的 felt252。";
+        return;
+      }
+      const result = decodeFelt(felt);
+      document.getElementById("decodeResult").innerText = `解碼結果：\n${result}`;
+    }
+  </script>
+</body>
+</html>
